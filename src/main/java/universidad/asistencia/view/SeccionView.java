@@ -1,24 +1,27 @@
 package universidad.asistencia.view;
 
-import universidad.asistencia.controller.PeriodoAcademicoController;
+import universidad.asistencia.controller.SeccionController;
+import universidad.asistencia.model.Curso;
+import universidad.asistencia.model.Docente;
 import universidad.asistencia.model.PeriodoAcademico;
+import universidad.asistencia.model.Seccion;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 
-public class PeriodoAcademicoView {
+public class SeccionView {
 
-    // Componentes vinculados desde PeriodoAcademicoView.form
+    // Componentes vinculados desde SeccionView.form
     private JPanel panelPrincipal;
 
     private JTextField txtId;
-    private JTextField txtNombre;
-    private JTextField txtFechaInicio;
-    private JTextField txtFechaFin;
+    private JTextField txtCodigo;
+    private JTextField txtIdCurso;
+    private JTextField txtIdPeriodo;
+    private JTextField txtIdDocente;
+    private JTextField txtAulaAsignada;
 
     private JCheckBox chkActivo;
 
@@ -30,34 +33,34 @@ public class PeriodoAcademicoView {
     private JTextField txtBuscar;
     private JButton btnBuscar;
 
-    private JTable tblPeriodos;
+    private JTable tblSecciones;
     private JButton btnSalir;
 
     // La View solamente conoce al Controller.
-    private final PeriodoAcademicoController periodoAcademicoController;
+    private final SeccionController seccionController;
 
 
     /*
      * Constructor normal.
      */
-    public PeriodoAcademicoView() {
+    public SeccionView() {
 
-        this(new PeriodoAcademicoController());
+        this(new SeccionController());
     }
 
 
     /*
      * También permitimos recibir el Controller desde afuera.
      */
-    public PeriodoAcademicoView(
-            PeriodoAcademicoController periodoAcademicoController
+    public SeccionView(
+            SeccionController seccionController
     ) {
 
-        this.periodoAcademicoController = periodoAcademicoController;
+        this.seccionController = seccionController;
 
         configurarFormulario();
         configurarEventos();
-        cargarPeriodos();
+        cargarSecciones();
     }
 
 
@@ -69,7 +72,7 @@ public class PeriodoAcademicoView {
         // El ID lo genera SQL Server.
         txtId.setEditable(false);
 
-        // Todo periodo nuevo inicia activo.
+        // Toda sección nueva inicia activa.
         chkActivo.setSelected(true);
 
         /*
@@ -85,9 +88,6 @@ public class PeriodoAcademicoView {
         btnDesactivar.setEnabled(false);
         btnDesactivar.setText("Desactivar");
 
-        txtFechaInicio.setToolTipText("Formato: aaaa-mm-dd");
-        txtFechaFin.setToolTipText("Formato: aaaa-mm-dd");
-
         configurarTabla();
     }
 
@@ -101,9 +101,11 @@ public class PeriodoAcademicoView {
                 new DefaultTableModel(
                         new Object[]{
                                 "ID",
-                                "Nombre",
-                                "Fecha inicio",
-                                "Fecha fin",
+                                "Código",
+                                "Curso",
+                                "Periodo",
+                                "Docente",
+                                "Aula",
                                 "Activo"
                         },
                         0
@@ -118,9 +120,9 @@ public class PeriodoAcademicoView {
                     }
                 };
 
-        tblPeriodos.setModel(modelo);
+        tblSecciones.setModel(modelo);
 
-        tblPeriodos.setSelectionMode(
+        tblSecciones.setSelectionMode(
                 ListSelectionModel.SINGLE_SELECTION
         );
     }
@@ -160,14 +162,14 @@ public class PeriodoAcademicoView {
 
         /*
          * Cuando seleccionamos una fila,
-         * recuperamos el periodo utilizando su ID.
+         * recuperamos la sección utilizando su ID.
          */
-        tblPeriodos
+        tblSecciones
                 .getSelectionModel()
                 .addListSelectionListener(e -> {
 
                     if (!e.getValueIsAdjusting()) {
-                        seleccionarPeriodo();
+                        seleccionarSeccion();
                     }
                 });
     }
@@ -182,48 +184,45 @@ public class PeriodoAcademicoView {
 
         try {
 
-            LocalDate fechaInicio =
-                    leerFecha(txtFechaInicio.getText());
-
-            LocalDate fechaFin =
-                    leerFecha(txtFechaFin.getText());
-
-            PeriodoAcademico periodo =
-                    new PeriodoAcademico(
-                            txtNombre.getText().trim(),
-                            fechaInicio,
-                            fechaFin
+            Seccion seccion =
+                    new Seccion(
+                            txtCodigo.getText().trim(),
+                            leerCurso(),
+                            leerPeriodo(),
+                            leerDocente(),
+                            txtAulaAsignada.getText().trim()
                     );
 
             boolean guardado =
-                    periodoAcademicoController.guardar(
-                            periodo
+                    seccionController.guardar(
+                            seccion
                     );
 
             if (guardado) {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "Periodo académico guardado correctamente.",
-                        "Periodo académico",
+                        "Sección guardada correctamente.",
+                        "Sección",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
                 limpiarFormulario();
 
-                cargarPeriodos();
+                cargarSecciones();
 
             } else {
 
                 mostrarError(
-                        "No se pudo guardar el periodo académico."
+                        "No se pudo guardar la sección."
                 );
             }
 
-        } catch (DateTimeParseException e) {
+        } catch (NumberFormatException e) {
 
             mostrarError(
-                    "Las fechas deben tener el formato aaaa-mm-dd."
+                    "Los ID de curso, periodo y docente "
+                            + "deben ser valores numéricos."
             );
 
         } catch (Exception e) {
@@ -240,29 +239,31 @@ public class PeriodoAcademicoView {
      * READ - LISTAR
      * ========================================================
      */
-    private void cargarPeriodos() {
+    private void cargarSecciones() {
 
         try {
 
-            List<PeriodoAcademico> periodos =
-                    periodoAcademicoController.listar();
+            List<Seccion> secciones =
+                    seccionController.listar();
 
             DefaultTableModel modelo =
                     (DefaultTableModel)
-                            tblPeriodos.getModel();
+                            tblSecciones.getModel();
 
             modelo.setRowCount(0);
 
-            for (PeriodoAcademico periodo : periodos) {
+            for (Seccion seccion : secciones) {
 
                 modelo.addRow(
                         new Object[]{
-                                periodo.getIdPeriodo(),
-                                periodo.getNombre(),
-                                periodo.getFechaInicio(),
-                                periodo.getFechaFin(),
+                                seccion.getIdSeccion(),
+                                seccion.getCodigo(),
+                                seccion.getCurso().getCodigo(),
+                                seccion.getPeriodoAcademico().getNombre(),
+                                seccion.getDocente().getCodigoEmpleado(),
+                                seccion.getAulaAsignada(),
 
-                                periodo.isActivo()
+                                seccion.isActivo()
                                         ? "Sí"
                                         : "No"
                         }
@@ -289,7 +290,7 @@ public class PeriodoAcademicoView {
 
             JOptionPane.showMessageDialog(
                     panelPrincipal,
-                    "Debe seleccionar un periodo académico.",
+                    "Debe seleccionar una sección.",
                     "Aviso",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -299,23 +300,19 @@ public class PeriodoAcademicoView {
 
         try {
 
-            int idPeriodo =
+            int idSeccion =
                     Integer.parseInt(
                             txtId.getText()
                     );
 
-            LocalDate fechaInicio =
-                    leerFecha(txtFechaInicio.getText());
-
-            LocalDate fechaFin =
-                    leerFecha(txtFechaFin.getText());
-
-            PeriodoAcademico periodo =
-                    new PeriodoAcademico(
-                            idPeriodo,
-                            txtNombre.getText().trim(),
-                            fechaInicio,
-                            fechaFin,
+            Seccion seccion =
+                    new Seccion(
+                            idSeccion,
+                            txtCodigo.getText().trim(),
+                            leerCurso(),
+                            leerPeriodo(),
+                            leerDocente(),
+                            txtAulaAsignada.getText().trim(),
 
                             /*
                              * Conservamos el estado actual.
@@ -324,34 +321,35 @@ public class PeriodoAcademicoView {
                     );
 
             boolean actualizado =
-                    periodoAcademicoController.actualizar(
-                            periodo
+                    seccionController.actualizar(
+                            seccion
                     );
 
             if (actualizado) {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "Periodo académico actualizado correctamente.",
-                        "Periodo académico",
+                        "Sección actualizada correctamente.",
+                        "Sección",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
                 limpiarFormulario();
 
-                cargarPeriodos();
+                cargarSecciones();
 
             } else {
 
                 mostrarError(
-                        "No se pudo actualizar el periodo académico."
+                        "No se pudo actualizar la sección."
                 );
             }
 
-        } catch (DateTimeParseException e) {
+        } catch (NumberFormatException e) {
 
             mostrarError(
-                    "Las fechas deben tener el formato aaaa-mm-dd."
+                    "Los ID de curso, periodo y docente "
+                            + "deben ser valores numéricos."
             );
 
         } catch (Exception e) {
@@ -380,7 +378,7 @@ public class PeriodoAcademicoView {
 
             JOptionPane.showMessageDialog(
                     panelPrincipal,
-                    "Debe seleccionar un periodo académico.",
+                    "Debe seleccionar una sección.",
                     "Aviso",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -390,7 +388,7 @@ public class PeriodoAcademicoView {
 
         /*
          * El checkbox refleja el estado actual
-         * del periodo seleccionado.
+         * de la sección seleccionada.
          */
         boolean estadoActual =
                 chkActivo.isSelected();
@@ -416,7 +414,7 @@ public class PeriodoAcademicoView {
                         panelPrincipal,
                         "¿Está seguro de "
                                 + accion
-                                + " el periodo académico?",
+                                + " la sección?",
                         "Confirmar "
                                 + accionTitulo,
                         JOptionPane.YES_NO_OPTION,
@@ -429,27 +427,23 @@ public class PeriodoAcademicoView {
 
         try {
 
-            int idPeriodo =
+            int idSeccion =
                     Integer.parseInt(
                             txtId.getText()
                     );
 
-            LocalDate fechaInicio =
-                    leerFecha(txtFechaInicio.getText());
-
-            LocalDate fechaFin =
-                    leerFecha(txtFechaFin.getText());
-
             /*
-             * Construimos el periodo con todos sus datos,
+             * Construimos la sección con todos sus datos,
              * cambiando únicamente el atributo activo.
              */
-            PeriodoAcademico periodo =
-                    new PeriodoAcademico(
-                            idPeriodo,
-                            txtNombre.getText().trim(),
-                            fechaInicio,
-                            fechaFin,
+            Seccion seccion =
+                    new Seccion(
+                            idSeccion,
+                            txtCodigo.getText().trim(),
+                            leerCurso(),
+                            leerPeriodo(),
+                            leerDocente(),
+                            txtAulaAsignada.getText().trim(),
                             nuevoEstado
                     );
 
@@ -459,21 +453,21 @@ public class PeriodoAcademicoView {
              * el campo activo.
              */
             boolean actualizado =
-                    periodoAcademicoController.actualizar(
-                            periodo
+                    seccionController.actualizar(
+                            seccion
                     );
 
             if (actualizado) {
 
                 String mensaje =
                         nuevoEstado
-                                ? "Periodo académico activado correctamente."
-                                : "Periodo académico desactivado correctamente.";
+                                ? "Sección activada correctamente."
+                                : "Sección desactivada correctamente.";
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
                         mensaje,
-                        "Periodo académico",
+                        "Sección",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
@@ -488,28 +482,29 @@ public class PeriodoAcademicoView {
                         nuevoEstado
                 );
 
-                cargarPeriodos();
+                cargarSecciones();
 
                 /*
                  * Volvemos a seleccionar visualmente
-                 * el mismo periodo.
+                 * la misma sección.
                  */
                 seleccionarFilaPorId(
-                        idPeriodo
+                        idSeccion
                 );
 
             } else {
 
                 mostrarError(
                         "No se pudo cambiar el estado "
-                                + "del periodo académico."
+                                + "de la sección."
                 );
             }
 
-        } catch (DateTimeParseException e) {
+        } catch (NumberFormatException e) {
 
             mostrarError(
-                    "Las fechas deben tener el formato aaaa-mm-dd."
+                    "Los ID de curso, periodo y docente "
+                            + "deben ser valores numéricos."
             );
 
         } catch (Exception e) {
@@ -523,7 +518,7 @@ public class PeriodoAcademicoView {
 
     /*
      * Cambia el texto del botón dependiendo
-     * del estado actual del periodo.
+     * del estado actual de la sección.
      *
      * Activo:
      *      botón = Desactivar
@@ -552,50 +547,50 @@ public class PeriodoAcademicoView {
 
     /*
      * ========================================================
-     * BUSCAR POR NOMBRE
+     * BUSCAR POR CÓDIGO
      * ========================================================
      */
     private void buscar() {
 
-        String nombre =
+        String codigo =
                 txtBuscar.getText().trim();
 
         /*
          * Si no escribió nada, mostramos nuevamente
-         * todos los periodos.
+         * todas las secciones.
          */
-        if (nombre.isBlank()) {
+        if (codigo.isBlank()) {
 
-            cargarPeriodos();
+            cargarSecciones();
 
             return;
         }
 
         try {
 
-            Optional<PeriodoAcademico> resultado =
-                    periodoAcademicoController
-                            .buscarPorNombre(nombre);
+            Optional<Seccion> resultado =
+                    seccionController
+                            .buscarPorCodigo(codigo);
 
             if (resultado.isPresent()) {
 
-                PeriodoAcademico periodo =
+                Seccion seccion =
                         resultado.get();
 
-                mostrarPeriodoEnFormulario(
-                        periodo
+                mostrarSeccionEnFormulario(
+                        seccion
                 );
 
                 seleccionarFilaPorId(
-                        periodo.getIdPeriodo()
+                        seccion.getIdSeccion()
                 );
 
             } else {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "No se encontró ningún periodo académico "
-                                + "con ese nombre.",
+                        "No se encontró ninguna sección "
+                                + "con ese código.",
                         "Búsqueda",
                         JOptionPane.INFORMATION_MESSAGE
                 );
@@ -615,10 +610,10 @@ public class PeriodoAcademicoView {
      * SELECCIÓN DESDE JTable
      * ========================================================
      */
-    private void seleccionarPeriodo() {
+    private void seleccionarSeccion() {
 
         int fila =
-                tblPeriodos.getSelectedRow();
+                tblSecciones.getSelectedRow();
 
         if (fila == -1) {
             return;
@@ -626,9 +621,9 @@ public class PeriodoAcademicoView {
 
         try {
 
-            int idPeriodo =
+            int idSeccion =
                     Integer.parseInt(
-                            tblPeriodos
+                            tblSecciones
                                     .getValueAt(
                                             fila,
                                             0
@@ -636,14 +631,14 @@ public class PeriodoAcademicoView {
                                     .toString()
                     );
 
-            Optional<PeriodoAcademico> resultado =
-                    periodoAcademicoController.buscar(
-                            idPeriodo
+            Optional<Seccion> resultado =
+                    seccionController.buscar(
+                            idSeccion
                     );
 
             if (resultado.isPresent()) {
 
-                mostrarPeriodoEnFormulario(
+                mostrarSeccionEnFormulario(
                         resultado.get()
                 );
             }
@@ -660,44 +655,54 @@ public class PeriodoAcademicoView {
     /*
      * Coloca la información del objeto en los controles.
      */
-    private void mostrarPeriodoEnFormulario(
-            PeriodoAcademico periodo
+    private void mostrarSeccionEnFormulario(
+            Seccion seccion
     ) {
 
         txtId.setText(
                 String.valueOf(
-                        periodo.getIdPeriodo()
+                        seccion.getIdSeccion()
                 )
         );
 
-        txtNombre.setText(
-                periodo.getNombre()
+        txtCodigo.setText(
+                seccion.getCodigo()
         );
 
-        txtFechaInicio.setText(
-                periodo.getFechaInicio() != null
-                        ? periodo.getFechaInicio().toString()
-                        : ""
+        txtIdCurso.setText(
+                String.valueOf(
+                        seccion.getCurso().getIdCurso()
+                )
         );
 
-        txtFechaFin.setText(
-                periodo.getFechaFin() != null
-                        ? periodo.getFechaFin().toString()
-                        : ""
+        txtIdPeriodo.setText(
+                String.valueOf(
+                        seccion.getPeriodoAcademico().getIdPeriodo()
+                )
+        );
+
+        txtIdDocente.setText(
+                String.valueOf(
+                        seccion.getDocente().getIdDocente()
+                )
+        );
+
+        txtAulaAsignada.setText(
+                seccion.getAulaAsignada()
         );
 
         /*
          * Reflejamos el estado real.
          */
         chkActivo.setSelected(
-                periodo.isActivo()
+                seccion.isActivo()
         );
 
         /*
          * Cambiamos automáticamente el texto del botón.
          */
         actualizarTextoBotonEstado(
-                periodo.isActivo()
+                seccion.isActivo()
         );
 
         /*
@@ -709,7 +714,7 @@ public class PeriodoAcademicoView {
 
         /*
          * El botón debe estar habilitado tanto para
-         * periodos activos como inactivos.
+         * secciones activas como inactivas.
          */
         btnDesactivar.setEnabled(true);
     }
@@ -720,18 +725,18 @@ public class PeriodoAcademicoView {
      * seleccionado por una búsqueda.
      */
     private void seleccionarFilaPorId(
-            int idPeriodo
+            int idSeccion
     ) {
 
         for (
                 int fila = 0;
-                fila < tblPeriodos.getRowCount();
+                fila < tblSecciones.getRowCount();
                 fila++
         ) {
 
             int idTabla =
                     Integer.parseInt(
-                            tblPeriodos
+                            tblSecciones
                                     .getValueAt(
                                             fila,
                                             0
@@ -739,15 +744,15 @@ public class PeriodoAcademicoView {
                                     .toString()
                     );
 
-            if (idTabla == idPeriodo) {
+            if (idTabla == idSeccion) {
 
-                tblPeriodos.setRowSelectionInterval(
+                tblSecciones.setRowSelectionInterval(
                         fila,
                         fila
                 );
 
-                tblPeriodos.scrollRectToVisible(
-                        tblPeriodos
+                tblSecciones.scrollRectToVisible(
+                        tblSecciones
                                 .getCellRect(
                                         fila,
                                         0,
@@ -770,28 +775,32 @@ public class PeriodoAcademicoView {
 
         limpiarFormulario();
 
-        txtNombre.requestFocus();
+        txtCodigo.requestFocus();
     }
 
 
     /*
-     * Limpia la pantalla para ingresar un nuevo periodo.
+     * Limpia la pantalla para ingresar una nueva sección.
      */
     private void limpiarFormulario() {
 
         txtId.setText("");
 
-        txtNombre.setText("");
+        txtCodigo.setText("");
 
-        txtFechaInicio.setText("");
+        txtIdCurso.setText("");
 
-        txtFechaFin.setText("");
+        txtIdPeriodo.setText("");
+
+        txtIdDocente.setText("");
+
+        txtAulaAsignada.setText("");
 
         txtBuscar.setText("");
 
         chkActivo.setSelected(true);
 
-        tblPeriodos.clearSelection();
+        tblSecciones.clearSelection();
 
         btnGuardar.setEnabled(true);
 
@@ -800,7 +809,7 @@ public class PeriodoAcademicoView {
         btnDesactivar.setEnabled(false);
 
         /*
-         * Para un nuevo periodo el estado inicial
+         * Para una nueva sección el estado inicial
          * siempre es activo.
          */
         btnDesactivar.setText(
@@ -810,13 +819,51 @@ public class PeriodoAcademicoView {
 
 
     /*
-     * Convierte el texto del formulario (aaaa-mm-dd) a LocalDate.
+     * ========================================================
+     * LECTURA DE CLAVES FORÁNEAS
+     *
+     * El formulario solo pide el ID del curso, del periodo
+     * y del docente. El Repository únicamente necesita ese
+     * ID para guardar/actualizar la sección.
+     * ========================================================
      */
-    private LocalDate leerFecha(String texto) {
+    private Curso leerCurso() {
 
-        return LocalDate.parse(
-                texto.trim()
+        Curso curso = new Curso();
+
+        curso.setIdCurso(
+                Integer.parseInt(
+                        txtIdCurso.getText().trim()
+                )
         );
+
+        return curso;
+    }
+
+    private PeriodoAcademico leerPeriodo() {
+
+        PeriodoAcademico periodo = new PeriodoAcademico();
+
+        periodo.setIdPeriodo(
+                Integer.parseInt(
+                        txtIdPeriodo.getText().trim()
+                )
+        );
+
+        return periodo;
+    }
+
+    private Docente leerDocente() {
+
+        Docente docente = new Docente();
+
+        docente.setIdDocente(
+                Integer.parseInt(
+                        txtIdDocente.getText().trim()
+                )
+        );
+
+        return docente;
     }
 
 

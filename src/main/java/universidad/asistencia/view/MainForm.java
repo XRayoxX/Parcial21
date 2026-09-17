@@ -61,17 +61,15 @@ public class MainForm {
         );
 
         btnPeriodos.addActionListener(
-                e -> moduloPendiente(
-                        "Períodos Académicos"
-                )
+                e -> abrirPeriodos()
         );
 
         btnSecciones.addActionListener(
-                e -> moduloPendiente("Secciones")
+                e -> abrirSecciones()
         );
 
         btnHorarios.addActionListener(
-                e -> moduloPendiente("Horarios")
+                e -> abrirHorarios()
         );
 
         btnInscripciones.addActionListener(
@@ -153,6 +151,63 @@ public class MainForm {
         abrirVentana(
                 "Administración de Estudiantes",
                 cursoView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * SECCIONES
+     * ======================================================
+     */
+    private void abrirSecciones() {
+
+        SeccionView seccionView =
+                new SeccionView();
+
+        abrirVentana(
+                "Administración de Secciones",
+                seccionView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * HORARIOS
+     * ======================================================
+     */
+    private void abrirHorarios() {
+
+        HorarioView horarioView =
+                new HorarioView();
+
+        abrirVentana(
+                "Administración de Horarios",
+                horarioView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * PERIODOS ACADÉMICOS
+     * ======================================================
+     */
+    private void abrirPeriodos() {
+
+        PeriodoAcademicoView periodoAcademicoView =
+                new PeriodoAcademicoView();
+
+        abrirVentana(
+                "Administración de Periodos Académicos",
+                periodoAcademicoView.getPanelPrincipal(),
                 950,
                 650
         );

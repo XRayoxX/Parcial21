@@ -41,6 +41,10 @@ public class HorarioSemanalRepository {
         try (Connection c = DatabaseConnection.getConnection(); PreparedStatement s = c.prepareStatement(sql)) { s.setInt(1, horario.getSeccion().getIdSeccion()); s.setInt(2, horario.getDiaSemana().getValue()); s.setTime(3, Time.valueOf(horario.getHoraInicio())); s.setTime(4, Time.valueOf(horario.getHoraFin())); s.setInt(5, horario.getIdHorario()); return s.executeUpdate() > 0; }
         catch (SQLException e) { throw JdbcSupport.error("actualizar el horario", e); }
     }
+    public boolean eliminar(int id) {
+        try (Connection c = DatabaseConnection.getConnection(); PreparedStatement s = c.prepareStatement("DELETE FROM HorarioSemanal WHERE id_horario = ?")) { s.setInt(1, id); return s.executeUpdate() > 0; }
+        catch (SQLException e) { throw JdbcSupport.error("eliminar el horario", e); }
+    }
 
     private List<HorarioSemanal> consultar(String sql, Object... values) {
         List<HorarioSemanal> resultado = new ArrayList<>();

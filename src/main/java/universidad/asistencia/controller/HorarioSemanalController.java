@@ -14,4 +14,5 @@ public class HorarioSemanalController {
     public List<HorarioSemanal> listarPorSeccion(int idSeccion) { return service.listarPorSeccion(idSeccion); }
     public Optional<HorarioSemanal> buscar(int id) { return service.buscar(id); }
     public boolean actualizar(HorarioSemanal h) { return service.actualizar(h); }
+    public boolean eliminar(int id) { return service.eliminar(id); }
 }
