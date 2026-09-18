@@ -73,29 +73,27 @@ public class MainForm {
         );
 
         btnInscripciones.addActionListener(
-                e -> moduloPendiente("Inscripciones")
+                e -> abrirInscripciones()
         );
 
         btnSesiones.addActionListener(
-                e -> moduloPendiente("Sesiones")
+                e -> abrirSesiones()
         );
 
         btnDispositivos.addActionListener(
-                e -> moduloPendiente("Dispositivos")
+                e -> abrirDispositivos()
         );
 
         btnAsistencia.addActionListener(
-                e -> moduloPendiente("Asistencia")
+                e -> abrirAsistencia()
         );
 
         btnJustificaciones.addActionListener(
-                e -> moduloPendiente(
-                        "Justificaciones"
-                )
+                e -> abrirJustificaciones()
         );
 
         btnUsuarios.addActionListener(
-                e -> moduloPendiente("Usuarios")
+                e -> abrirUsuarios()
         );
 
         btnSalir.addActionListener(
@@ -117,6 +115,23 @@ public class MainForm {
         abrirVentana(
                 "Administración de Estudiantes",
                 estudianteView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+    /*
+     * ======================================================
+     * INSCRIPCIONES
+     * ======================================================
+     */
+    private void abrirInscripciones() {
+
+        InscripcionesView inscripcionesView =
+                new InscripcionesView();
+
+        abrirVentana(
+                "Administración de Inscripciones",
+                inscripcionesView.getPanelPrincipal(),
                 950,
                 650
         );
@@ -149,7 +164,7 @@ public class MainForm {
                 new CursoView();
 
         abrirVentana(
-                "Administración de Estudiantes",
+                "Administración de Cursos",
                 cursoView.getPanelPrincipal(),
                 950,
                 650
@@ -189,6 +204,101 @@ public class MainForm {
         abrirVentana(
                 "Administración de Horarios",
                 horarioView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * DISPOSITIVOS
+     * ======================================================
+     */
+    private void abrirDispositivos() {
+
+        DispositivoView dispositivoView =
+                new DispositivoView();
+
+        abrirVentana(
+                "Administración de Dispositivos",
+                dispositivoView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * SESIONES DE CLASE
+     * ======================================================
+     */
+    private void abrirSesiones() {
+
+        SesionClaseView sesionClaseView =
+                new SesionClaseView();
+
+        abrirVentana(
+                "Administración de Sesiones de Clase",
+                sesionClaseView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * ASISTENCIA Y MARCAJES
+     * ======================================================
+     */
+    private void abrirAsistencia() {
+
+        AsistenciaView asistenciaView =
+                new AsistenciaView();
+
+        abrirVentana(
+                "Asistencia y Marcajes",
+                asistenciaView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * JUSTIFICACIONES
+     * ======================================================
+     */
+    private void abrirJustificaciones() {
+
+        JustificacionView justificacionView =
+                new JustificacionView();
+
+        abrirVentana(
+                "Administración de Justificaciones",
+                justificacionView.getPanelPrincipal(),
+                950,
+                650
+        );
+    }
+
+
+    /*
+     * ======================================================
+     * USUARIOS
+     * ======================================================
+     */
+    private void abrirUsuarios() {
+
+        UsuarioView usuarioView =
+                new UsuarioView();
+
+        abrirVentana(
+                "Administración de Usuarios",
+                usuarioView.getPanelPrincipal(),
                 950,
                 650
         );
@@ -244,25 +354,6 @@ public class MainForm {
         ventana.setLocationRelativeTo(null);
 
         ventana.setVisible(true);
-    }
-
-
-    /*
-     * Mientras vamos construyendo los módulos,
-     * los botones ya pueden existir en el MainForm.
-     */
-    private void moduloPendiente(
-            String modulo
-    ) {
-
-        JOptionPane.showMessageDialog(
-                panelPrincipal,
-                "El módulo de "
-                        + modulo
-                        + " todavía no ha sido construido.",
-                "Módulo pendiente",
-                JOptionPane.INFORMATION_MESSAGE
-        );
     }
 
 

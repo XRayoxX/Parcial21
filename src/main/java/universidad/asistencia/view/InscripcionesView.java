@@ -1,58 +1,58 @@
 package universidad.asistencia.view;
 
-import universidad.asistencia.controller.HorarioSemanalController;
+import universidad.asistencia.controller.EstudianteController;
+import universidad.asistencia.controller.InscripcionController;
 import universidad.asistencia.controller.SeccionController;
-import universidad.asistencia.model.HorarioSemanal;
+import universidad.asistencia.model.Estudiante;
+import universidad.asistencia.model.Inscripcion;
 import universidad.asistencia.model.Seccion;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.Component;
-import java.time.DayOfWeek;
-import java.time.LocalTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 
-public class HorarioView {
+public class InscripcionesView {
 
-    // Componentes vinculados desde HorarioView.form
+    // Componentes vinculados desde InscripcionesView.form
     private JPanel panelPrincipal;
 
     private JTextField txtId;
+    private JComboBox cmbEstudiante;
     private JComboBox cmbSeccion;
-    private JComboBox cmbDiaSemana;
-    private JTextField txtHoraInicio;
-    private JTextField txtHoraFin;
+    private JTextField txtFechaInscripcion;
+    private JTextField txtFechaRetiro;
+
+    private JCheckBox chkActivo;
 
     private JButton btnNuevo;
     private JButton btnGuardar;
     private JButton btnActualizar;
-
-    /*
-     * HorarioSemanal no tiene columna "activo" en la base de datos,
-     * así que este botón realiza una eliminación real (no un toggle).
-     */
     private JButton btnDesactivar;
 
     private JTextField txtBuscar;
     private JButton btnBuscar;
 
-    private JTable tblHorarios;
+    private JTable tblInscripciones;
     private JButton btnSalir;
 
     // La View solamente conoce a los Controllers.
-    private final HorarioSemanalController horarioController;
+    private final InscripcionController inscripcionController;
+    private final EstudianteController estudianteController;
     private final SeccionController seccionController;
 
 
     /*
      * Constructor normal.
      */
-    public HorarioView() {
+    public InscripcionesView() {
 
         this(
-                new HorarioSemanalController(),
+                new InscripcionController(),
+                new EstudianteController(),
                 new SeccionController()
         );
     }
@@ -61,18 +61,20 @@ public class HorarioView {
     /*
      * También permitimos recibir los Controllers desde afuera.
      */
-    public HorarioView(
-            HorarioSemanalController horarioController,
+    public InscripcionesView(
+            InscripcionController inscripcionController,
+            EstudianteController estudianteController,
             SeccionController seccionController
     ) {
 
-        this.horarioController = horarioController;
+        this.inscripcionController = inscripcionController;
+        this.estudianteController = estudianteController;
         this.seccionController = seccionController;
 
         configurarFormulario();
         configurarEventos();
         cargarCombos();
-        cargarHorarios();
+        cargarInscripciones();
     }
 
 
@@ -84,18 +86,19 @@ public class HorarioView {
         // El ID lo genera SQL Server.
         txtId.setEditable(false);
 
-        cmbDiaSemana.setModel(
-                new DefaultComboBoxModel<>(
-                        DayOfWeek.values()
-                )
-        );
+        /*
+         * El estado y la fecha de retiro no se editan directamente:
+         * se completan automáticamente al usar el botón Retirar.
+         */
+        chkActivo.setEnabled(false);
+        chkActivo.setSelected(true);
 
-        btnGuardar.setEnabled(true);
+        txtFechaRetiro.setEditable(false);
 
         btnActualizar.setEnabled(false);
 
+        btnDesactivar.setText("Retirar");
         btnDesactivar.setEnabled(false);
-        btnDesactivar.setText("Eliminar");
 
         configurarCombos();
 
@@ -104,11 +107,41 @@ public class HorarioView {
 
 
     /*
-     * Renderers para que los combos muestren texto legible:
-     * la sección como "código - curso" y el día en español.
+     * Los combos muestran texto legible en vez del toString()
+     * por defecto de Estudiante/Seccion.
      */
     @SuppressWarnings("unchecked")
     private void configurarCombos() {
+
+        cmbEstudiante.setRenderer(new DefaultListCellRenderer() {
+
+            @Override
+            public Component getListCellRendererComponent(
+                    JList list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+
+                super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                );
+
+                if (value instanceof Estudiante estudiante) {
+
+                    setText(
+                            estudiante.getCarnet()
+                                    + " - "
+                                    + estudiante.getNombres()
+                                    + " "
+                                    + estudiante.getApellidos()
+                    );
+                }
+
+                return this;
+            }
+        });
 
         cmbSeccion.setRenderer(new DefaultListCellRenderer() {
 
@@ -137,44 +170,29 @@ public class HorarioView {
                 return this;
             }
         });
-
-        cmbDiaSemana.setRenderer(new DefaultListCellRenderer() {
-
-            @Override
-            public Component getListCellRendererComponent(
-                    JList list,
-                    Object value,
-                    int index,
-                    boolean isSelected,
-                    boolean cellHasFocus
-            ) {
-
-                super.getListCellRendererComponent(
-                        list, value, index, isSelected, cellHasFocus
-                );
-
-                if (value instanceof DayOfWeek dia) {
-
-                    setText(
-                            formatDiaSemana(dia)
-                    );
-                }
-
-                return this;
-            }
-        });
     }
 
 
     /*
-     * Carga la lista de secciones en el combo. Usamos listar()
-     * (no listarActivos()) para poder seguir mostrando el horario
-     * de una sección que ya se haya desactivado.
+     * Carga la lista de estudiantes y secciones en los combos.
+     *
+     * Usamos listar() (no listarActivos()) para que, al editar una
+     * inscripción existente, el combo pueda seguir mostrando un
+     * estudiante o sección que ya se haya desactivado.
      */
     @SuppressWarnings("unchecked")
     private void cargarCombos() {
 
         try {
+
+            DefaultComboBoxModel<Estudiante> modeloEstudiantes =
+                    new DefaultComboBoxModel<>();
+
+            for (Estudiante estudiante : estudianteController.listar()) {
+                modeloEstudiantes.addElement(estudiante);
+            }
+
+            cmbEstudiante.setModel(modeloEstudiantes);
 
             DefaultComboBoxModel<Seccion> modeloSecciones =
                     new DefaultComboBoxModel<>();
@@ -203,10 +221,12 @@ public class HorarioView {
                 new DefaultTableModel(
                         new Object[]{
                                 "ID",
+                                "Carnet",
+                                "Estudiante",
                                 "Sección",
-                                "Día",
-                                "Hora inicio",
-                                "Hora fin"
+                                "Fecha Inscripción",
+                                "Fecha Retiro",
+                                "Activa"
                         },
                         0
                 ) {
@@ -220,9 +240,9 @@ public class HorarioView {
                     }
                 };
 
-        tblHorarios.setModel(modelo);
+        tblInscripciones.setModel(modelo);
 
-        tblHorarios.setSelectionMode(
+        tblInscripciones.setSelectionMode(
                 ListSelectionModel.SINGLE_SELECTION
         );
     }
@@ -246,7 +266,7 @@ public class HorarioView {
         );
 
         btnDesactivar.addActionListener(
-                e -> eliminar()
+                e -> retirar()
         );
 
         btnBuscar.addActionListener(
@@ -259,14 +279,14 @@ public class HorarioView {
 
         /*
          * Cuando seleccionamos una fila,
-         * recuperamos el horario utilizando su ID.
+         * recuperamos la inscripción utilizando su ID.
          */
-        tblHorarios
+        tblInscripciones
                 .getSelectionModel()
                 .addListSelectionListener(e -> {
 
                     if (!e.getValueIsAdjusting()) {
-                        seleccionarHorario();
+                        seleccionarInscripcion();
                     }
                 });
     }
@@ -281,56 +301,57 @@ public class HorarioView {
 
         try {
 
+            Estudiante estudiante =
+                    (Estudiante) cmbEstudiante.getSelectedItem();
+
             Seccion seccion =
                     (Seccion) cmbSeccion.getSelectedItem();
 
-            if (seccion == null) {
+            if (estudiante == null || seccion == null) {
 
                 mostrarError(
-                        "Debe seleccionar una sección."
+                        "Debe seleccionar un estudiante y una sección."
                 );
 
                 return;
             }
 
-            HorarioSemanal horario =
-                    new HorarioSemanal(
+            LocalDate fechaInscripcion =
+                    leerFecha(txtFechaInscripcion, "La fecha de inscripción");
+
+            Inscripcion inscripcion =
+                    new Inscripcion(
+                            estudiante,
                             seccion,
-                            (DayOfWeek) cmbDiaSemana.getSelectedItem(),
-                            leerHora(txtHoraInicio.getText()),
-                            leerHora(txtHoraFin.getText())
+                            fechaInscripcion
                     );
 
             boolean guardado =
-                    horarioController.guardar(
-                            horario
+                    inscripcionController.guardar(
+                            inscripcion
                     );
 
             if (guardado) {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "Horario guardado correctamente.",
-                        "Horario",
+                        "Inscripción guardada correctamente.\n"
+                                + "ID generado: "
+                                + inscripcion.getIdInscripcion(),
+                        "Inscripción",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
                 limpiarFormulario();
 
-                cargarHorarios();
+                cargarInscripciones();
 
             } else {
 
                 mostrarError(
-                        "No se pudo guardar el horario."
+                        "No se pudo guardar la inscripción."
                 );
             }
-
-        } catch (DateTimeParseException e) {
-
-            mostrarError(
-                    "Las horas deben tener el formato HH:mm."
-            );
 
         } catch (Exception e) {
 
@@ -346,14 +367,14 @@ public class HorarioView {
      * READ - LISTAR
      * ========================================================
      */
-    private void cargarHorarios() {
+    private void cargarInscripciones() {
 
         try {
 
-            List<HorarioSemanal> horarios =
-                    horarioController.listar();
+            List<Inscripcion> inscripciones =
+                    inscripcionController.listar();
 
-            llenarTabla(horarios);
+            llenarTabla(inscripciones);
 
         } catch (Exception e) {
 
@@ -365,29 +386,37 @@ public class HorarioView {
 
 
     /*
-     * Vuelca una lista de horarios dentro de la JTable.
-     * La reutilizamos tanto para listar todo como
-     * para filtrar por sección.
+     * Llena la tabla con la lista de inscripciones recibida.
      */
     private void llenarTabla(
-            List<HorarioSemanal> horarios
+            List<Inscripcion> inscripciones
     ) {
 
         DefaultTableModel modelo =
                 (DefaultTableModel)
-                        tblHorarios.getModel();
+                        tblInscripciones.getModel();
 
         modelo.setRowCount(0);
 
-        for (HorarioSemanal horario : horarios) {
+        for (Inscripcion inscripcion : inscripciones) {
 
             modelo.addRow(
                     new Object[]{
-                            horario.getIdHorario(),
-                            horario.getSeccion().getCodigo(),
-                            formatDiaSemana(horario.getDiaSemana()),
-                            horario.getHoraInicio(),
-                            horario.getHoraFin()
+                            inscripcion.getIdInscripcion(),
+                            inscripcion.getEstudiante().getCarnet(),
+                            inscripcion.getEstudiante().getNombres()
+                                    + " "
+                                    + inscripcion.getEstudiante().getApellidos(),
+                            inscripcion.getSeccion().getCodigo(),
+                            inscripcion.getFechaInscripcion(),
+
+                            inscripcion.getFechaRetiro() == null
+                                    ? ""
+                                    : inscripcion.getFechaRetiro(),
+
+                            inscripcion.isActiva()
+                                    ? "Sí"
+                                    : "No"
                     }
             );
         }
@@ -405,7 +434,7 @@ public class HorarioView {
 
             JOptionPane.showMessageDialog(
                     panelPrincipal,
-                    "Debe seleccionar un horario.",
+                    "Debe seleccionar una inscripción.",
                     "Aviso",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -415,62 +444,72 @@ public class HorarioView {
 
         try {
 
-            int idHorario =
+            int idInscripcion =
                     Integer.parseInt(
                             txtId.getText()
                     );
 
+            Estudiante estudiante =
+                    (Estudiante) cmbEstudiante.getSelectedItem();
+
             Seccion seccion =
                     (Seccion) cmbSeccion.getSelectedItem();
 
-            if (seccion == null) {
+            if (estudiante == null || seccion == null) {
 
                 mostrarError(
-                        "Debe seleccionar una sección."
+                        "Debe seleccionar un estudiante y una sección."
                 );
 
                 return;
             }
 
-            HorarioSemanal horario =
-                    new HorarioSemanal(
-                            idHorario,
+            LocalDate fechaInscripcion =
+                    leerFecha(txtFechaInscripcion, "La fecha de inscripción");
+
+            LocalDate fechaRetiro =
+                    txtFechaRetiro.getText().isBlank()
+                            ? null
+                            : leerFecha(txtFechaRetiro, "La fecha de retiro");
+
+            Inscripcion inscripcion =
+                    new Inscripcion(
+                            idInscripcion,
+                            estudiante,
                             seccion,
-                            (DayOfWeek) cmbDiaSemana.getSelectedItem(),
-                            leerHora(txtHoraInicio.getText()),
-                            leerHora(txtHoraFin.getText())
+                            fechaInscripcion,
+                            fechaRetiro,
+
+                            /*
+                             * Conservamos el estado actual.
+                             */
+                            chkActivo.isSelected()
                     );
 
             boolean actualizado =
-                    horarioController.actualizar(
-                            horario
+                    inscripcionController.actualizar(
+                            inscripcion
                     );
 
             if (actualizado) {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "Horario actualizado correctamente.",
-                        "Horario",
+                        "Inscripción actualizada correctamente.",
+                        "Inscripción",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
                 limpiarFormulario();
 
-                cargarHorarios();
+                cargarInscripciones();
 
             } else {
 
                 mostrarError(
-                        "No se pudo actualizar el horario."
+                        "No se pudo actualizar la inscripción."
                 );
             }
-
-        } catch (DateTimeParseException e) {
-
-            mostrarError(
-                    "Las horas deben tener el formato HH:mm."
-            );
 
         } catch (Exception e) {
 
@@ -483,20 +522,21 @@ public class HorarioView {
 
     /*
      * ========================================================
-     * ELIMINAR
+     * RETIRAR
      *
-     * HorarioSemanal no maneja un atributo "activo", por lo
-     * que aquí no hay un estado que alternar: el botón
-     * elimina definitivamente el registro seleccionado.
+     * No existe "reactivar" una inscripción: una vez retirada,
+     * el Repository no ofrece forma de revertirlo. Por eso el
+     * botón siempre dice "Retirar" y se deshabilita si la
+     * inscripción ya no está activa.
      * ========================================================
      */
-    private void eliminar() {
+    private void retirar() {
 
         if (txtId.getText().isBlank()) {
 
             JOptionPane.showMessageDialog(
                     panelPrincipal,
-                    "Debe seleccionar un horario.",
+                    "Debe seleccionar una inscripción.",
                     "Aviso",
                     JOptionPane.WARNING_MESSAGE
             );
@@ -504,50 +544,60 @@ public class HorarioView {
             return;
         }
 
-        int respuesta =
-                JOptionPane.showConfirmDialog(
+        String fechaTexto =
+                JOptionPane.showInputDialog(
                         panelPrincipal,
-                        "¿Está seguro de eliminar este horario?",
-                        "Confirmar eliminación",
-                        JOptionPane.YES_NO_OPTION,
-                        JOptionPane.QUESTION_MESSAGE
+                        "Fecha de retiro (AAAA-MM-DD):",
+                        LocalDate.now().toString()
                 );
 
-        if (respuesta != JOptionPane.YES_OPTION) {
+        if (fechaTexto == null || fechaTexto.isBlank()) {
             return;
         }
 
         try {
 
-            int idHorario =
+            LocalDate fechaRetiro =
+                    LocalDate.parse(fechaTexto.trim());
+
+            int idInscripcion =
                     Integer.parseInt(
                             txtId.getText()
                     );
 
-            boolean eliminado =
-                    horarioController.eliminar(
-                            idHorario
+            boolean retirado =
+                    inscripcionController.retirar(
+                            idInscripcion,
+                            fechaRetiro
                     );
 
-            if (eliminado) {
+            if (retirado) {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "Horario eliminado correctamente.",
-                        "Horario",
+                        "Inscripción retirada correctamente.",
+                        "Inscripción",
                         JOptionPane.INFORMATION_MESSAGE
                 );
 
-                limpiarFormulario();
+                cargarInscripciones();
 
-                cargarHorarios();
+                seleccionarFilaPorId(
+                        idInscripcion
+                );
 
             } else {
 
                 mostrarError(
-                        "No se pudo eliminar el horario."
+                        "No se pudo retirar la inscripción."
                 );
             }
+
+        } catch (DateTimeParseException e) {
+
+            mostrarError(
+                    "La fecha de retiro debe tener el formato AAAA-MM-DD."
+            );
 
         } catch (Exception e) {
 
@@ -560,7 +610,7 @@ public class HorarioView {
 
     /*
      * ========================================================
-     * BUSCAR POR SECCIÓN
+     * BUSCAR POR ID DE ESTUDIANTE
      * ========================================================
      */
     private void buscar() {
@@ -570,41 +620,41 @@ public class HorarioView {
 
         /*
          * Si no escribió nada, mostramos nuevamente
-         * todos los horarios.
+         * todas las inscripciones.
          */
         if (texto.isBlank()) {
 
-            cargarHorarios();
+            cargarInscripciones();
 
             return;
         }
 
         try {
 
-            int idSeccion =
+            int idEstudiante =
                     Integer.parseInt(texto);
 
-            List<HorarioSemanal> resultado =
-                    horarioController
-                            .listarPorSeccion(idSeccion);
-
-            llenarTabla(resultado);
+            List<Inscripcion> resultado =
+                    inscripcionController
+                            .listarPorEstudiante(idEstudiante);
 
             if (resultado.isEmpty()) {
 
                 JOptionPane.showMessageDialog(
                         panelPrincipal,
-                        "Esa sección no tiene horarios "
-                                + "registrados.",
+                        "No se encontraron inscripciones "
+                                + "para ese estudiante.",
                         "Búsqueda",
                         JOptionPane.INFORMATION_MESSAGE
                 );
             }
 
+            llenarTabla(resultado);
+
         } catch (NumberFormatException e) {
 
             mostrarError(
-                    "El ID de sección debe ser un valor numérico."
+                    "El ID de estudiante debe ser numérico."
             );
 
         } catch (Exception e) {
@@ -621,10 +671,10 @@ public class HorarioView {
      * SELECCIÓN DESDE JTable
      * ========================================================
      */
-    private void seleccionarHorario() {
+    private void seleccionarInscripcion() {
 
         int fila =
-                tblHorarios.getSelectedRow();
+                tblInscripciones.getSelectedRow();
 
         if (fila == -1) {
             return;
@@ -632,9 +682,9 @@ public class HorarioView {
 
         try {
 
-            int idHorario =
+            int idInscripcion =
                     Integer.parseInt(
-                            tblHorarios
+                            tblInscripciones
                                     .getValueAt(
                                             fila,
                                             0
@@ -642,14 +692,14 @@ public class HorarioView {
                                     .toString()
                     );
 
-            Optional<HorarioSemanal> resultado =
-                    horarioController.buscar(
-                            idHorario
+            Optional<Inscripcion> resultado =
+                    inscripcionController.buscar(
+                            idInscripcion
                     );
 
             if (resultado.isPresent()) {
 
-                mostrarHorarioEnFormulario(
+                mostrarInscripcionEnFormulario(
                         resultado.get()
                 );
             }
@@ -666,31 +716,40 @@ public class HorarioView {
     /*
      * Coloca la información del objeto en los controles.
      */
-    private void mostrarHorarioEnFormulario(
-            HorarioSemanal horario
+    private void mostrarInscripcionEnFormulario(
+            Inscripcion inscripcion
     ) {
 
         txtId.setText(
                 String.valueOf(
-                        horario.getIdHorario()
+                        inscripcion.getIdInscripcion()
                 )
         );
 
+        seleccionarEstudianteEnCombo(
+                inscripcion.getEstudiante().getIdEstudiante()
+        );
+
         seleccionarSeccionEnCombo(
-                horario.getSeccion().getIdSeccion()
+                inscripcion.getSeccion().getIdSeccion()
         );
 
-        cmbDiaSemana.setSelectedItem(
-                horario.getDiaSemana()
+        txtFechaInscripcion.setText(
+                String.valueOf(
+                        inscripcion.getFechaInscripcion()
+                )
         );
 
-        txtHoraInicio.setText(
-                horario.getHoraInicio().toString()
+        txtFechaRetiro.setText(
+                inscripcion.getFechaRetiro() == null
+                        ? ""
+                        : inscripcion.getFechaRetiro().toString()
         );
 
-        txtHoraFin.setText(
-                horario.getHoraFin().toString()
+        chkActivo.setSelected(
+                inscripcion.isActiva()
         );
+
 
         /*
          * Estamos trabajando con un registro existente.
@@ -699,10 +758,44 @@ public class HorarioView {
 
         btnActualizar.setEnabled(true);
 
-        btnDesactivar.setEnabled(true);
+        /*
+         * Solo se puede retirar una inscripción que sigue activa.
+         */
+        btnDesactivar.setEnabled(
+                inscripcion.isActiva()
+        );
     }
 
 
+    /*
+     * Ubica en el combo de estudiantes el que tiene el ID indicado.
+     */
+    private void seleccionarEstudianteEnCombo(
+            int idEstudiante
+    ) {
+
+        for (
+                int i = 0;
+                i < cmbEstudiante.getItemCount();
+                i++
+        ) {
+
+            Estudiante estudiante =
+                    (Estudiante) cmbEstudiante.getItemAt(i);
+
+            if (estudiante.getIdEstudiante() == idEstudiante) {
+
+                cmbEstudiante.setSelectedIndex(i);
+
+                return;
+            }
+        }
+    }
+
+
+    /*
+     * Ubica en el combo de secciones la que tiene el ID indicado.
+     */
     private void seleccionarSeccionEnCombo(
             int idSeccion
     ) {
@@ -727,6 +820,52 @@ public class HorarioView {
 
 
     /*
+     * Busca visualmente en la JTable el registro
+     * seleccionado por una búsqueda.
+     */
+    private void seleccionarFilaPorId(
+            int idInscripcion
+    ) {
+
+        for (
+                int fila = 0;
+                fila < tblInscripciones.getRowCount();
+                fila++
+        ) {
+
+            int idTabla =
+                    Integer.parseInt(
+                            tblInscripciones
+                                    .getValueAt(
+                                            fila,
+                                            0
+                                    )
+                                    .toString()
+                    );
+
+            if (idTabla == idInscripcion) {
+
+                tblInscripciones.setRowSelectionInterval(
+                        fila,
+                        fila
+                );
+
+                tblInscripciones.scrollRectToVisible(
+                        tblInscripciones
+                                .getCellRect(
+                                        fila,
+                                        0,
+                                        true
+                                )
+                );
+
+                break;
+            }
+        }
+    }
+
+
+    /*
      * ========================================================
      * NUEVO
      * ========================================================
@@ -738,25 +877,29 @@ public class HorarioView {
 
 
     /*
-     * Limpia la pantalla para ingresar un nuevo horario.
+     * Limpia la pantalla para ingresar una nueva inscripción.
      */
     private void limpiarFormulario() {
 
         txtId.setText("");
 
+        if (cmbEstudiante.getItemCount() > 0) {
+            cmbEstudiante.setSelectedIndex(0);
+        }
+
         if (cmbSeccion.getItemCount() > 0) {
             cmbSeccion.setSelectedIndex(0);
         }
 
-        cmbDiaSemana.setSelectedIndex(0);
+        txtFechaInscripcion.setText("");
 
-        txtHoraInicio.setText("");
-
-        txtHoraFin.setText("");
+        txtFechaRetiro.setText("");
 
         txtBuscar.setText("");
 
-        tblHorarios.clearSelection();
+        chkActivo.setSelected(true);
+
+        tblInscripciones.clearSelection();
 
         btnGuardar.setEnabled(true);
 
@@ -767,33 +910,34 @@ public class HorarioView {
 
 
     /*
-     * ========================================================
-     * LECTURA / FORMATO DE CAMPOS
-     * ========================================================
+     * Lee una fecha (AAAA-MM-DD) de un campo de texto con
+     * un mensaje de error claro si el formato es inválido.
      */
-    private LocalTime leerHora(String texto) {
+    private LocalDate leerFecha(
+            JTextField campo,
+            String nombreCampo
+    ) {
 
-        return LocalTime.parse(
-                texto.trim()
-        );
-    }
+        String texto =
+                campo.getText().trim();
 
-    /*
-     * Convierte el DayOfWeek a su nombre en español
-     * para mostrarlo en el combo, el formulario y la tabla.
-     */
-    private String formatDiaSemana(DayOfWeek dia) {
+        if (texto.isBlank()) {
 
-        return switch (dia) {
+            throw new IllegalArgumentException(
+                    nombreCampo + " es obligatoria."
+            );
+        }
 
-            case MONDAY -> "Lunes";
-            case TUESDAY -> "Martes";
-            case WEDNESDAY -> "Miércoles";
-            case THURSDAY -> "Jueves";
-            case FRIDAY -> "Viernes";
-            case SATURDAY -> "Sábado";
-            case SUNDAY -> "Domingo";
-        };
+        try {
+
+            return LocalDate.parse(texto);
+
+        } catch (DateTimeParseException e) {
+
+            throw new IllegalArgumentException(
+                    nombreCampo + " debe tener el formato AAAA-MM-DD."
+            );
+        }
     }
 
 
@@ -823,8 +967,7 @@ public class HorarioView {
 
 
     /*
-     * Conservamos exactamente la lógica utilizada:
-     * salir de este catálogo significa regresar al MainForm.
+     * Salir de este catálogo significa regresar al MainForm.
      */
     private void salir() {
 
@@ -839,8 +982,6 @@ public class HorarioView {
 
         if (respuesta == JOptionPane.YES_OPTION) {
 
-            // Obtiene la ventana JFrame que contiene este JPanel
-            // y cierra únicamente el catálogo actual.
             java.awt.Window ventanaActual =
                     SwingUtilities.getWindowAncestor(
                             panelPrincipal

@@ -1,5 +1,8 @@
 package universidad.asistencia.view;
 
+import universidad.asistencia.controller.CursoController;
+import universidad.asistencia.controller.DocenteController;
+import universidad.asistencia.controller.PeriodoAcademicoController;
 import universidad.asistencia.controller.SeccionController;
 import universidad.asistencia.model.Curso;
 import universidad.asistencia.model.Docente;
@@ -8,6 +11,7 @@ import universidad.asistencia.model.Seccion;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.awt.Component;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,9 +22,9 @@ public class SeccionView {
 
     private JTextField txtId;
     private JTextField txtCodigo;
-    private JTextField txtIdCurso;
-    private JTextField txtIdPeriodo;
-    private JTextField txtIdDocente;
+    private JComboBox cmbCurso;
+    private JComboBox cmbPeriodo;
+    private JComboBox cmbDocente;
     private JTextField txtAulaAsignada;
 
     private JCheckBox chkActivo;
@@ -36,8 +40,11 @@ public class SeccionView {
     private JTable tblSecciones;
     private JButton btnSalir;
 
-    // La View solamente conoce al Controller.
+    // La View solamente conoce a los Controllers.
     private final SeccionController seccionController;
+    private final CursoController cursoController;
+    private final PeriodoAcademicoController periodoController;
+    private final DocenteController docenteController;
 
 
     /*
@@ -45,21 +52,33 @@ public class SeccionView {
      */
     public SeccionView() {
 
-        this(new SeccionController());
+        this(
+                new SeccionController(),
+                new CursoController(),
+                new PeriodoAcademicoController(),
+                new DocenteController()
+        );
     }
 
 
     /*
-     * También permitimos recibir el Controller desde afuera.
+     * También permitimos recibir los Controllers desde afuera.
      */
     public SeccionView(
-            SeccionController seccionController
+            SeccionController seccionController,
+            CursoController cursoController,
+            PeriodoAcademicoController periodoController,
+            DocenteController docenteController
     ) {
 
         this.seccionController = seccionController;
+        this.cursoController = cursoController;
+        this.periodoController = periodoController;
+        this.docenteController = docenteController;
 
         configurarFormulario();
         configurarEventos();
+        cargarCombos();
         cargarSecciones();
     }
 
@@ -88,7 +107,150 @@ public class SeccionView {
         btnDesactivar.setEnabled(false);
         btnDesactivar.setText("Desactivar");
 
+        configurarCombos();
+
         configurarTabla();
+    }
+
+
+    /*
+     * Los combos muestran texto legible en vez del toString()
+     * por defecto de Curso/PeriodoAcademico/Docente.
+     */
+    @SuppressWarnings("unchecked")
+    private void configurarCombos() {
+
+        cmbCurso.setRenderer(new DefaultListCellRenderer() {
+
+            @Override
+            public Component getListCellRendererComponent(
+                    JList list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+
+                super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                );
+
+                if (value instanceof Curso curso) {
+
+                    setText(
+                            curso.getCodigo()
+                                    + " - "
+                                    + curso.getNombre()
+                    );
+                }
+
+                return this;
+            }
+        });
+
+        cmbPeriodo.setRenderer(new DefaultListCellRenderer() {
+
+            @Override
+            public Component getListCellRendererComponent(
+                    JList list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+
+                super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                );
+
+                if (value instanceof PeriodoAcademico periodo) {
+
+                    setText(
+                            periodo.getNombre()
+                    );
+                }
+
+                return this;
+            }
+        });
+
+        cmbDocente.setRenderer(new DefaultListCellRenderer() {
+
+            @Override
+            public Component getListCellRendererComponent(
+                    JList list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+
+                super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                );
+
+                if (value instanceof Docente docente) {
+
+                    setText(
+                            docente.getCodigoEmpleado()
+                                    + " - "
+                                    + docente.getNombres()
+                                    + " "
+                                    + docente.getApellidos()
+                    );
+                }
+
+                return this;
+            }
+        });
+    }
+
+
+    /*
+     * Carga la lista de cursos, periodos y docentes en los combos.
+     *
+     * Usamos listar() (no listarActivos()) para que, al editar una
+     * sección existente, el combo pueda seguir mostrando un curso,
+     * periodo o docente que ya se haya desactivado.
+     */
+    @SuppressWarnings("unchecked")
+    private void cargarCombos() {
+
+        try {
+
+            DefaultComboBoxModel<Curso> modeloCursos =
+                    new DefaultComboBoxModel<>();
+
+            for (Curso curso : cursoController.listar()) {
+                modeloCursos.addElement(curso);
+            }
+
+            cmbCurso.setModel(modeloCursos);
+
+            DefaultComboBoxModel<PeriodoAcademico> modeloPeriodos =
+                    new DefaultComboBoxModel<>();
+
+            for (PeriodoAcademico periodo : periodoController.listar()) {
+                modeloPeriodos.addElement(periodo);
+            }
+
+            cmbPeriodo.setModel(modeloPeriodos);
+
+            DefaultComboBoxModel<Docente> modeloDocentes =
+                    new DefaultComboBoxModel<>();
+
+            for (Docente docente : docenteController.listar()) {
+                modeloDocentes.addElement(docente);
+            }
+
+            cmbDocente.setModel(modeloDocentes);
+
+        } catch (Exception e) {
+
+            mostrarError(
+                    e.getMessage()
+            );
+        }
     }
 
 
@@ -184,12 +346,31 @@ public class SeccionView {
 
         try {
 
+            Curso curso =
+                    (Curso) cmbCurso.getSelectedItem();
+
+            PeriodoAcademico periodo =
+                    (PeriodoAcademico) cmbPeriodo.getSelectedItem();
+
+            Docente docente =
+                    (Docente) cmbDocente.getSelectedItem();
+
+            if (curso == null || periodo == null || docente == null) {
+
+                mostrarError(
+                        "Debe seleccionar un curso, un periodo "
+                                + "y un docente."
+                );
+
+                return;
+            }
+
             Seccion seccion =
                     new Seccion(
                             txtCodigo.getText().trim(),
-                            leerCurso(),
-                            leerPeriodo(),
-                            leerDocente(),
+                            curso,
+                            periodo,
+                            docente,
                             txtAulaAsignada.getText().trim()
                     );
 
@@ -217,13 +398,6 @@ public class SeccionView {
                         "No se pudo guardar la sección."
                 );
             }
-
-        } catch (NumberFormatException e) {
-
-            mostrarError(
-                    "Los ID de curso, periodo y docente "
-                            + "deben ser valores numéricos."
-            );
 
         } catch (Exception e) {
 
@@ -305,13 +479,32 @@ public class SeccionView {
                             txtId.getText()
                     );
 
+            Curso curso =
+                    (Curso) cmbCurso.getSelectedItem();
+
+            PeriodoAcademico periodo =
+                    (PeriodoAcademico) cmbPeriodo.getSelectedItem();
+
+            Docente docente =
+                    (Docente) cmbDocente.getSelectedItem();
+
+            if (curso == null || periodo == null || docente == null) {
+
+                mostrarError(
+                        "Debe seleccionar un curso, un periodo "
+                                + "y un docente."
+                );
+
+                return;
+            }
+
             Seccion seccion =
                     new Seccion(
                             idSeccion,
                             txtCodigo.getText().trim(),
-                            leerCurso(),
-                            leerPeriodo(),
-                            leerDocente(),
+                            curso,
+                            periodo,
+                            docente,
                             txtAulaAsignada.getText().trim(),
 
                             /*
@@ -344,13 +537,6 @@ public class SeccionView {
                         "No se pudo actualizar la sección."
                 );
             }
-
-        } catch (NumberFormatException e) {
-
-            mostrarError(
-                    "Los ID de curso, periodo y docente "
-                            + "deben ser valores numéricos."
-            );
 
         } catch (Exception e) {
 
@@ -432,6 +618,15 @@ public class SeccionView {
                             txtId.getText()
                     );
 
+            Curso curso =
+                    (Curso) cmbCurso.getSelectedItem();
+
+            PeriodoAcademico periodo =
+                    (PeriodoAcademico) cmbPeriodo.getSelectedItem();
+
+            Docente docente =
+                    (Docente) cmbDocente.getSelectedItem();
+
             /*
              * Construimos la sección con todos sus datos,
              * cambiando únicamente el atributo activo.
@@ -440,9 +635,9 @@ public class SeccionView {
                     new Seccion(
                             idSeccion,
                             txtCodigo.getText().trim(),
-                            leerCurso(),
-                            leerPeriodo(),
-                            leerDocente(),
+                            curso,
+                            periodo,
+                            docente,
                             txtAulaAsignada.getText().trim(),
                             nuevoEstado
                     );
@@ -499,13 +694,6 @@ public class SeccionView {
                                 + "de la sección."
                 );
             }
-
-        } catch (NumberFormatException e) {
-
-            mostrarError(
-                    "Los ID de curso, periodo y docente "
-                            + "deben ser valores numéricos."
-            );
 
         } catch (Exception e) {
 
@@ -669,22 +857,16 @@ public class SeccionView {
                 seccion.getCodigo()
         );
 
-        txtIdCurso.setText(
-                String.valueOf(
-                        seccion.getCurso().getIdCurso()
-                )
+        seleccionarCursoEnCombo(
+                seccion.getCurso().getIdCurso()
         );
 
-        txtIdPeriodo.setText(
-                String.valueOf(
-                        seccion.getPeriodoAcademico().getIdPeriodo()
-                )
+        seleccionarPeriodoEnCombo(
+                seccion.getPeriodoAcademico().getIdPeriodo()
         );
 
-        txtIdDocente.setText(
-                String.valueOf(
-                        seccion.getDocente().getIdDocente()
-                )
+        seleccionarDocenteEnCombo(
+                seccion.getDocente().getIdDocente()
         );
 
         txtAulaAsignada.setText(
@@ -717,6 +899,84 @@ public class SeccionView {
          * secciones activas como inactivas.
          */
         btnDesactivar.setEnabled(true);
+    }
+
+
+    /*
+     * Ubica en el combo de cursos el que tiene el ID indicado.
+     */
+    private void seleccionarCursoEnCombo(
+            int idCurso
+    ) {
+
+        for (
+                int i = 0;
+                i < cmbCurso.getItemCount();
+                i++
+        ) {
+
+            Curso curso =
+                    (Curso) cmbCurso.getItemAt(i);
+
+            if (curso.getIdCurso() == idCurso) {
+
+                cmbCurso.setSelectedIndex(i);
+
+                return;
+            }
+        }
+    }
+
+
+    /*
+     * Ubica en el combo de periodos el que tiene el ID indicado.
+     */
+    private void seleccionarPeriodoEnCombo(
+            int idPeriodo
+    ) {
+
+        for (
+                int i = 0;
+                i < cmbPeriodo.getItemCount();
+                i++
+        ) {
+
+            PeriodoAcademico periodo =
+                    (PeriodoAcademico) cmbPeriodo.getItemAt(i);
+
+            if (periodo.getIdPeriodo() == idPeriodo) {
+
+                cmbPeriodo.setSelectedIndex(i);
+
+                return;
+            }
+        }
+    }
+
+
+    /*
+     * Ubica en el combo de docentes el que tiene el ID indicado.
+     */
+    private void seleccionarDocenteEnCombo(
+            int idDocente
+    ) {
+
+        for (
+                int i = 0;
+                i < cmbDocente.getItemCount();
+                i++
+        ) {
+
+            Docente docente =
+                    (Docente) cmbDocente.getItemAt(i);
+
+            if (docente.getIdDocente() == idDocente) {
+
+                cmbDocente.setSelectedIndex(i);
+
+                return;
+            }
+        }
     }
 
 
@@ -788,11 +1048,17 @@ public class SeccionView {
 
         txtCodigo.setText("");
 
-        txtIdCurso.setText("");
+        if (cmbCurso.getItemCount() > 0) {
+            cmbCurso.setSelectedIndex(0);
+        }
 
-        txtIdPeriodo.setText("");
+        if (cmbPeriodo.getItemCount() > 0) {
+            cmbPeriodo.setSelectedIndex(0);
+        }
 
-        txtIdDocente.setText("");
+        if (cmbDocente.getItemCount() > 0) {
+            cmbDocente.setSelectedIndex(0);
+        }
 
         txtAulaAsignada.setText("");
 
@@ -815,55 +1081,6 @@ public class SeccionView {
         btnDesactivar.setText(
                 "Desactivar"
         );
-    }
-
-
-    /*
-     * ========================================================
-     * LECTURA DE CLAVES FORÁNEAS
-     *
-     * El formulario solo pide el ID del curso, del periodo
-     * y del docente. El Repository únicamente necesita ese
-     * ID para guardar/actualizar la sección.
-     * ========================================================
-     */
-    private Curso leerCurso() {
-
-        Curso curso = new Curso();
-
-        curso.setIdCurso(
-                Integer.parseInt(
-                        txtIdCurso.getText().trim()
-                )
-        );
-
-        return curso;
-    }
-
-    private PeriodoAcademico leerPeriodo() {
-
-        PeriodoAcademico periodo = new PeriodoAcademico();
-
-        periodo.setIdPeriodo(
-                Integer.parseInt(
-                        txtIdPeriodo.getText().trim()
-                )
-        );
-
-        return periodo;
-    }
-
-    private Docente leerDocente() {
-
-        Docente docente = new Docente();
-
-        docente.setIdDocente(
-                Integer.parseInt(
-                        txtIdDocente.getText().trim()
-                )
-        );
-
-        return docente;
     }
 
 
@@ -893,8 +1110,7 @@ public class SeccionView {
 
 
     /*
-     * Conservamos exactamente la lógica utilizada:
-     * salir de este catálogo significa regresar al MainForm.
+     * Salir de este catálogo significa regresar al MainForm.
      */
     private void salir() {
 
@@ -909,8 +1125,6 @@ public class SeccionView {
 
         if (respuesta == JOptionPane.YES_OPTION) {
 
-            // Obtiene la ventana JFrame que contiene este JPanel
-            // y cierra únicamente el catálogo actual.
             java.awt.Window ventanaActual =
                     SwingUtilities.getWindowAncestor(
                             panelPrincipal
